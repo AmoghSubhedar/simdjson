@@ -6,8 +6,31 @@
 #include <unistd.h>
 #endif
 #include "simdjson/simdjson.h"
+#include "simdjson/simddetection.h"
 
 namespace simdjson {
+
+instruction_set find_best_supported_implementation() {
+  uint32_t available_implementations = detectHostSIMDExtensions();
+#if defined (__AVX2__) || defined(__SSE4_2__) || (defined(_MSC_VER) && defined(_M_AMD64))
+#ifdef __AVX2__
+  if (available_implementations & SIMDExtension_AVX2) {
+    return instruction_set::avx2;
+  }
+#endif
+#if defined(__SSE4_2__) || (defined(_MSC_VER) && defined(_M_AMD64))
+  if ((available_implementations & SIMDExtension_AVX) || (available_implementations & SIMDExtension_SSE)) {
+    return instruction_set::sse4_2;
+  }
+#endif
+#elif defined(__ARM_NEON) || (defined(_MSC_VER) && defined(_M_ARM64))
+  if (available_implementations | SIMDExtension_NEON) {
+    return instruction_set::neon;
+  }
+#endif
+  return instruction_set::none;
+}
+
 // Responsible to select the best json_parse implementation
 int json_parse_dispatch(const uint8_t *buf, size_t len, ParsedJson &pj, bool reallocifneeded) {
   // Versions for each implementation
@@ -21,17 +44,7 @@ int json_parse_dispatch(const uint8_t *buf, size_t len, ParsedJson &pj, bool rea
   json_parse_functype* neon_implementation = &json_parse_implementation<instruction_set::neon>;
 #endif
 
-  // Determining which implementation is the more suitable
-  // Should be done at runtime. Does not make any sense on preprocessor.
-#ifdef __AVX2__
-  instruction_set best_implementation = instruction_set::avx2;
-#elif defined (__SSE4_2__) || (defined(_MSC_VER) && defined(_M_AMD64))
-  instruction_set best_implementation = instruction_set::sse4_2;
-#elif defined (__ARM_NEON) || (defined(_MSC_VER) && defined(_M_ARM64))
-  instruction_set best_implementation = instruction_set::neon;
-#else
-  instruction_set best_implementation = instruction_set::none;
-#endif
+  instruction_set best_implementation = find_best_supported_implementation();
   
   // Selecting the best implementation
   switch (best_implementation) {
