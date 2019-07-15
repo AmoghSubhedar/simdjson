@@ -25,9 +25,12 @@ std::string_view get_corpus(std::string filename) {
       throw  std::runtime_error("could not allocate memory");
     }
     std::rewind(fp);
-    std::fread(buf, 1, len, fp);
+    size_t resultsize = std::fread(buf, 1, len, fp);
     //buf[len] = '\0';// no need
     std::fclose(fp);
+    if(resultsize != len) {
+      throw  std::runtime_error("could not read the entire file");
+    }
     return std::string_view(buf,len);
   }
   throw  std::runtime_error("could not load corpus");
